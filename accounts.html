@@ -5,7 +5,50 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>ADVANCED TRADING SYSTEM | Professional Trading Platform</title>
+    <title>ProTrader AI | Professional Trading Platform</title>
+    
+    <!-- Firebase SDKs -->
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+        
+        // ===== REPLACE WITH YOUR FIREBASE CONFIG =====
+        // Go to Firebase Console → Project Settings → General → Your apps
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+        
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        
+        // Make available globally
+        window.auth = auth;
+        window.db = db;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.signOut = signOut;
+        window.onAuthStateChanged = onAuthStateChanged;
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.getDoc = getDoc;
+        window.updateDoc = updateDoc;
+        window.serverTimestamp = serverTimestamp;
+        window.collection = collection;
+        window.query = query;
+        window.where = where;
+        window.getDocs = getDocs;
+        window.addDoc = addDoc;
+    </script>
+    
     <style>
         * {
             margin: 0;
@@ -125,7 +168,7 @@
             font-size: 0.85rem;
         }
 
-        .form-group input {
+        .form-group input, .form-group select {
             width: 100%;
             padding: 14px 16px;
             background: rgba(255,255,255,0.05);
@@ -136,7 +179,7 @@
             transition: all 0.2s;
         }
 
-        .form-group input:focus {
+        .form-group input:focus, .form-group select:focus {
             outline: none;
             border-color: var(--primary);
         }
@@ -170,6 +213,20 @@
             font-size: 0.8rem;
             margin-top: 8px;
             display: none;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
         /* Dashboard */
@@ -218,8 +275,76 @@
             padding: 10px 20px;
             border-radius: 10px;
             cursor: pointer;
-            margin-top: 20px;
             width: 100%;
+            font-size: 0.9rem;
+        }
+
+        .trading-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border);
+        }
+
+        .signal-card {
+            background: rgba(41,98,255,0.1);
+            border-radius: 16px;
+            padding: 20px;
+            margin-top: 15px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+
+        .btn-trading {
+            flex: 1;
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-start {
+            background: linear-gradient(135deg, var(--success), #009624);
+            color: white;
+        }
+
+        .btn-stop {
+            background: linear-gradient(135deg, var(--danger), #c62800);
+            color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 4px;
         }
     </style>
 </head>
@@ -248,10 +373,7 @@
                     <input type="password" id="loginPassword" placeholder="Enter your password">
                 </div>
                 <div class="error-message" id="loginError"></div>
-                <button class="btn-auth" onclick="login()">Sign In</button>
-                <div style="text-align: center; margin-top: 20px; font-size: 0.8rem; color: var(--text-secondary);">
-                    software created by CALEKYZ FX
-                </div>
+                <button class="btn-auth" onclick="handleLogin()">Sign In</button>
             </div>
 
             <!-- Register Form -->
@@ -274,7 +396,7 @@
                 </div>
                 <div class="form-group">
                     <label>Select Plan</label>
-                    <select id="regPlan" style="width:100%; padding:14px; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:12px; color:white;">
+                    <select id="regPlan">
                         <option value="starter">Starter - $29/month</option>
                         <option value="pro">Pro Trader - $79/month</option>
                         <option value="vip">VIP Elite - $199/month</option>
@@ -282,12 +404,12 @@
                 </div>
                 <div class="error-message" id="registerError"></div>
                 <div class="success-message" id="registerSuccess"></div>
-                <button class="btn-auth" onclick="register()">Create Account</button>
+                <button class="btn-auth" onclick="handleRegister()">Create Account</button>
             </div>
         </div>
     </div>
 
-    <!-- Dashboard (Trading Bot) -->
+    <!-- Dashboard -->
     <div class="dashboard-container" id="dashboardContainer">
         <div class="dashboard-header">
             <div style="display: flex; justify-content: space-between; align-items: center; max-width: 600px; margin: 0 auto;">
@@ -295,7 +417,7 @@
                     <h2 style="font-size: 1.3rem;">⚡ ProTrader AI</h2>
                     <p style="font-size: 0.7rem; color: var(--text-secondary);" id="userEmailDisplay"></p>
                 </div>
-                <button onclick="logout()" style="background: rgba(255,61,0,0.2); border: none; padding: 8px 16px; border-radius: 10px; color: var(--danger);">Logout</button>
+                <button onclick="handleLogout()" style="background: rgba(255,61,0,0.2); border: none; padding: 8px 16px; border-radius: 10px; color: var(--danger);">Logout</button>
             </div>
         </div>
 
@@ -307,31 +429,60 @@
                         <div><span class="plan-badge" id="userPlanDisplay"></span></div>
                     </div>
                     <div style="text-align: right;">
-                        <div>Subscription Active</div>
-                        <div style="font-size: 0.7rem; color: var(--success);" id="trialDaysLeft">14 days trial remaining</div>
+                        <div id="trialStatus" style="font-size: 0.7rem; color: var(--success);">Active</div>
                     </div>
                 </div>
             </div>
 
-            <!-- Embed the full trading bot here -->
-            <div id="tradingBotContainer">
-                <!-- The complete trading bot code will be inserted here -->
-                <div style="text-align: center; padding: 50px; color: var(--text-secondary);">
-                    Loading Trading Platform...
+            <!-- Trading Bot Interface -->
+            <div class="trading-card">
+                <div style="text-align: center; margin-bottom: 20px;">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">TRADING BOT STATUS</div>
+                    <div style="font-size: 1.2rem; font-weight: 700; margin-top: 5px;" id="botStatus">● Stopped</div>
                 </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="winRate">87.3%</div>
+                        <div class="stat-label">Win Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="signalsCount">0</div>
+                        <div class="stat-label">Signals Today</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="accuracy">94%</div>
+                        <div class="stat-label">Accuracy</div>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button class="btn-trading btn-start" onclick="startBot()">▶ Start Trading</button>
+                    <button class="btn-trading btn-stop" onclick="stopBot()">⏸ Stop</button>
+                </div>
+
+                <div id="signalDisplay"></div>
+            </div>
+
+            <div class="trading-card">
+                <div style="font-weight: 600; margin-bottom: 15px;">📊 Market Data</div>
+                <div id="marketData"></div>
             </div>
         </div>
     </div>
 
-    <script>
-        // User database (in production, this would be a real database)
-        let users = JSON.parse(localStorage.getItem('trading_users') || '[]');
+    <script type="module">
+        // Firebase is already imported from the module script
+        // These variables are available globally from the module
         
-        // Current session
         let currentUser = null;
-
-        // Switch between login/register tabs
-        function switchTab(tab) {
+        let userData = null;
+        let botRunning = false;
+        let botInterval = null;
+        let signalsToday = 0;
+        
+        // Make functions global for onclick handlers
+        window.switchTab = function(tab) {
             const loginForm = document.getElementById('loginForm');
             const registerForm = document.getElementById('registerForm');
             const tabs = document.querySelectorAll('.auth-tab');
@@ -348,292 +499,284 @@
                 tabs[1].classList.add('active');
             }
             
-            // Clear errors
             document.getElementById('loginError').style.display = 'none';
             document.getElementById('registerError').style.display = 'none';
             document.getElementById('registerSuccess').style.display = 'none';
-        }
-
-        // Register new user
-        function register() {
+        };
+        
+        // Handle Login
+        window.handleLogin = async function() {
+            const email = document.getElementById('loginEmail').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const errorDiv = document.getElementById('loginError');
+            
+            if (!email || !password) {
+                errorDiv.textContent = 'Please enter email and password';
+                errorDiv.style.display = 'block';
+                return;
+            }
+            
+            errorDiv.style.display = 'none';
+            
+            try {
+                const userCredential = await window.signInWithEmailAndPassword(window.auth, email, password);
+                currentUser = userCredential.user;
+                
+                // Load user data from Firestore
+                const userDoc = await window.getDoc(window.doc(window.db, 'users', currentUser.uid));
+                if (userDoc.exists()) {
+                    userData = userDoc.data();
+                }
+                
+                showDashboard();
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+            }
+        };
+        
+        // Handle Register
+        window.handleRegister = async function() {
             const name = document.getElementById('regName').value.trim();
             const email = document.getElementById('regEmail').value.trim();
             const password = document.getElementById('regPassword').value;
             const confirmPassword = document.getElementById('regConfirmPassword').value;
             const plan = document.getElementById('regPlan').value;
+            const errorDiv = document.getElementById('registerError');
+            const successDiv = document.getElementById('registerSuccess');
             
-            // Validation
             if (!name || !email || !password) {
-                showError('register', 'Please fill in all fields');
+                errorDiv.textContent = 'Please fill in all fields';
+                errorDiv.style.display = 'block';
                 return;
             }
             
             if (password !== confirmPassword) {
-                showError('register', 'Passwords do not match');
+                errorDiv.textContent = 'Passwords do not match';
+                errorDiv.style.display = 'block';
                 return;
             }
             
             if (password.length < 6) {
-                showError('register', 'Password must be at least 6 characters');
+                errorDiv.textContent = 'Password must be at least 6 characters';
+                errorDiv.style.display = 'block';
                 return;
             }
             
-            if (!email.includes('@')) {
-                showError('register', 'Please enter a valid email address');
-                return;
-            }
+            errorDiv.style.display = 'none';
             
-            // Check if user exists
-            if (users.find(u => u.email === email)) {
-                showError('register', 'Email already registered. Please login.');
-                return;
-            }
-            
-            // Create new user
-            const newUser = {
-                id: Date.now(),
-                name: name,
-                email: email,
-                password: password,
-                plan: plan,
-                planName: plan === 'starter' ? 'Starter Plan' : (plan === 'pro' ? 'Pro Trader' : 'VIP Elite'),
-                registeredAt: new Date().toISOString(),
-                trialEnds: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-                isActive: true
-            };
-            
-            users.push(newUser);
-            localStorage.setItem('trading_users', JSON.stringify(users));
-            
-            showSuccess('register', 'Account created successfully! Please login.');
-            
-            // Clear form
-            document.getElementById('regName').value = '';
-            document.getElementById('regEmail').value = '';
-            document.getElementById('regPassword').value = '';
-            document.getElementById('regConfirmPassword').value = '';
-            
-            // Switch to login after 2 seconds
-            setTimeout(() => {
-                switchTab('login');
-            }, 2000);
-        }
-
-        // Login user
-        function login() {
-            const email = document.getElementById('loginEmail').value.trim();
-            const password = document.getElementById('loginPassword').value;
-            
-            // Demo account
-            if (email === 'demo@trader.com' && password === 'demo123') {
-                currentUser = {
-                    id: 'demo',
-                    name: 'Demo Trader',
-                    email: 'demo@trader.com',
-                    plan: 'pro',
-                    planName: 'Pro Trader (Demo)',
-                    isDemo: true
+            try {
+                const userCredential = await window.createUserWithEmailAndPassword(window.auth, email, password);
+                currentUser = userCredential.user;
+                
+                // Save user data to Firestore
+                const planNames = { starter: 'Starter Plan', pro: 'Pro Trader', vip: 'VIP Elite' };
+                const trialEnds = new Date();
+                trialEnds.setDate(trialEnds.getDate() + 14);
+                
+                userData = {
+                    uid: currentUser.uid,
+                    name: name,
+                    email: email,
+                    plan: plan,
+                    planName: planNames[plan],
+                    registeredAt: new Date().toISOString(),
+                    trialEnds: trialEnds.toISOString(),
+                    isActive: true,
+                    signalsGenerated: 0
                 };
-                showDashboard();
-                return;
+                
+                await window.setDoc(window.doc(window.db, 'users', currentUser.uid), userData);
+                
+                successDiv.textContent = 'Account created successfully! Redirecting...';
+                successDiv.style.display = 'block';
+                
+                setTimeout(() => {
+                    showDashboard();
+                }, 1500);
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
             }
-            
-            if (!email || !password) {
-                showError('login', 'Please enter email and password');
-                return;
-            }
-            
-            const user = users.find(u => u.email === email && u.password === password);
-            
-            if (!user) {
-                showError('login', 'Invalid email or password');
-                return;
-            }
-            
-            // Check if trial expired
-            const trialEnd = new Date(user.trialEnds);
-            if (trialEnd < new Date() && !user.isPaid) {
-                showError('login', 'Your trial has expired. Please upgrade your plan.');
-                return;
-            }
-            
-            currentUser = user;
-            showDashboard();
-        }
-
-        // Logout
-        function logout() {
+        };
+        
+        // Handle Logout
+        window.handleLogout = async function() {
+            await window.signOut(window.auth);
             currentUser = null;
+            userData = null;
+            stopBot();
             document.getElementById('dashboardContainer').style.display = 'none';
             document.getElementById('authContainer').style.display = 'flex';
             
-            // Clear login form
+            // Clear forms
             document.getElementById('loginEmail').value = '';
             document.getElementById('loginPassword').value = '';
-        }
-
-        // Show dashboard with trading bot
-        function showDashboard() {
+        };
+        
+        // Show Dashboard
+        async function showDashboard() {
             document.getElementById('authContainer').style.display = 'none';
             document.getElementById('dashboardContainer').style.display = 'block';
             
-            // Update user info
-            document.getElementById('userEmailDisplay').textContent = currentUser.email;
-            document.getElementById('userNameDisplay').textContent = currentUser.name;
-            document.getElementById('userPlanDisplay').textContent = currentUser.planName;
+            document.getElementById('userEmailDisplay').textContent = userData.email;
+            document.getElementById('userNameDisplay').textContent = userData.name;
+            document.getElementById('userPlanDisplay').textContent = userData.planName;
             
-            // Calculate trial days left
-            if (!currentUser.isDemo && currentUser.trialEnds) {
-                const trialEnd = new Date(currentUser.trialEnds);
-                const daysLeft = Math.ceil((trialEnd - new Date()) / (1000 * 60 * 60 * 24));
-                document.getElementById('trialDaysLeft').textContent = `${daysLeft} days trial remaining`;
-                if (daysLeft <= 3 && daysLeft > 0) {
-                    document.getElementById('trialDaysLeft').style.color = 'var(--warning)';
-                } else if (daysLeft <= 0) {
-                    document.getElementById('trialDaysLeft').textContent = 'Trial expired - Please upgrade';
-                    document.getElementById('trialDaysLeft').style.color = 'var(--danger)';
-                }
+            // Check trial status
+            const trialEnd = new Date(userData.trialEnds);
+            const now = new Date();
+            const daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+            
+            if (daysLeft > 0) {
+                document.getElementById('trialStatus').innerHTML = `${daysLeft} days trial remaining`;
+                document.getElementById('trialStatus').style.color = 'var(--success)';
+            } else {
+                document.getElementById('trialStatus').innerHTML = 'Trial expired - Upgrade';
+                document.getElementById('trialStatus').style.color = 'var(--danger)';
             }
             
-            // Load the trading bot
-            loadTradingBot();
-        }
-
-        // Load the complete trading bot
-        function loadTradingBot() {
-            const container = document.getElementById('tradingBotContainer');
+            // Load signals count
+            await loadSignalsCount();
+            updateMarketData();
             
-            // This is where you paste the ENTIRE trading bot HTML from previous response
-            // For brevity, I'll include a simplified version - but you can paste the full bot here
-            
-            container.innerHTML = `
-                <div style="background: var(--card-bg); border-radius: 20px; padding: 20px; margin-bottom: 20px; border: 1px solid var(--border);">
-                    <div style="text-align: center; margin-bottom: 20px;">
-                        <div style="font-size: 0.8rem; color: var(--text-secondary);">ACTIVE SUBSCRIPTION</div>
-                        <div style="font-size: 1.5rem; font-weight: 700;">${currentUser.planName}</div>
-                        <div style="font-size: 0.7rem; color: var(--success); margin-top: 5px;">✓ Full Access Granted</div>
-                    </div>
-                    
-                    <div style="background: rgba(0,0,0,0.3); border-radius: 12px; padding: 15px; margin-bottom: 15px;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-                            <span>📊 Trading Bot Status</span>
-                            <span style="color: var(--success);">● ONLINE</span>
-                        </div>
-                        <div style="height: 4px; background: var(--border); border-radius: 2px; overflow: hidden;">
-                            <div style="width: 100%; height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary));"></div>
-                        </div>
-                    </div>
-                    
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px;">
-                        <div style="text-align: center; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 10px;">
-                            <div style="font-size: 1.2rem; font-weight: 700;">87.3%</div>
-                            <div style="font-size: 0.7rem; color: var(--text-secondary);">Win Rate</div>
-                        </div>
-                        <div style="text-align: center; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 10px;">
-                            <div style="font-size: 1.2rem; font-weight: 700;">2,847</div>
-                            <div style="font-size: 0.7rem; color: var(--text-secondary);">Trades</div>
-                        </div>
-                        <div style="text-align: center; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 10px;">
-                            <div style="font-size: 1.2rem; font-weight: 700;">+42.8%</div>
-                            <div style="font-size: 0.7rem; color: var(--text-secondary);">Monthly ROI</div>
-                        </div>
-                    </div>
-                    
-                    <div style="background: rgba(41, 98, 255, 0.1); border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid rgba(41,98,255,0.3);">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <div style="font-weight: 600;">🚀 Premium Features Active</div>
-                                <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 4px;">
-                                    ${currentUser.plan === 'vip' ? '✓ VIP Access: All features + Dedicated Support' : 
-                                      currentUser.plan === 'pro' ? '✓ Pro Access: Advanced AI + Priority Support' : 
-                                      '✓ Starter Access: Basic AI + Email Support'}
-                                </div>
-                            </div>
-                            <div style="font-size: 2rem;">⚡</div>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn-auth" style="flex: 1;" onclick="startBot()">▶ Start Trading</button>
-                        <button class="btn-auth" style="flex: 1; background: var(--danger);" onclick="stopBot()">⏸ Stop</button>
-                    </div>
-                    
-                    <div id="signalDisplay" style="margin-top: 20px; min-height: 100px;"></div>
-                </div>
-            `;
+            // Update market data every 5 seconds
+            setInterval(() => {
+                if (currentUser) updateMarketData();
+            }, 5000);
         }
-
-        // Bot control functions
-        let botInterval;
-        let botRunning = false;
         
-        function startBot() {
+        // Load signals count from Firestore
+        async function loadSignalsCount() {
+            const signalsQuery = window.query(
+                window.collection(window.db, 'signals'),
+                window.where('userId', '==', currentUser.uid),
+                window.where('date', '==', new Date().toDateString())
+            );
+            const snapshot = await window.getDocs(signalsQuery);
+            signalsToday = snapshot.size;
+            document.getElementById('signalsCount').textContent = signalsToday;
+        }
+        
+        // Save signal to Firestore
+        async function saveSignal(signalData) {
+            await window.addDoc(window.collection(window.db, 'signals'), {
+                userId: currentUser.uid,
+                ...signalData,
+                timestamp: window.serverTimestamp(),
+                date: new Date().toDateString()
+            });
+            
+            // Update user's signal count
+            await window.updateDoc(window.doc(window.db, 'users', currentUser.uid), {
+                signalsGenerated: (userData.signalsGenerated || 0) + 1
+            });
+            
+            signalsToday++;
+            document.getElementById('signalsCount').textContent = signalsToday;
+        }
+        
+        // Update market data
+        function updateMarketData() {
+            const pairs = [
+                { symbol: 'EUR/USD', price: (1.085 + Math.random() * 0.01).toFixed(5), change: (Math.random() - 0.5) * 0.5 },
+                { symbol: 'GBP/USD', price: (1.265 + Math.random() * 0.01).toFixed(5), change: (Math.random() - 0.5) * 0.5 },
+                { symbol: 'XAU/USD', price: (2035 + Math.random() * 20).toFixed(2), change: (Math.random() - 0.5) * 1 },
+                { symbol: 'BTC/USD', price: (62500 + Math.random() * 1000).toFixed(0), change: (Math.random() - 0.5) * 2 }
+            ];
+            
+            const container = document.getElementById('marketData');
+            container.innerHTML = pairs.map(pair => `
+                <div style="display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--border);">
+                    <span style="font-weight: 600;">${pair.symbol}</span>
+                    <span>${pair.price}</span>
+                    <span style="color: ${pair.change >= 0 ? 'var(--success)' : 'var(--danger)'}">
+                        ${pair.change >= 0 ? '▲' : '▼'} ${Math.abs(pair.change).toFixed(2)}%
+                    </span>
+                </div>
+            `).join('');
+        }
+        
+        // Start Bot
+        window.startBot = function() {
             if (botRunning) return;
             botRunning = true;
-            const display = document.getElementById('signalDisplay');
-            display.innerHTML = '<div style="text-align: center; color: var(--success);">🤖 Bot started. Monitoring markets...</div>';
+            document.getElementById('botStatus').innerHTML = '● Running';
+            document.getElementById('botStatus').style.color = 'var(--success)';
             
-            botInterval = setInterval(() => {
+            botInterval = setInterval(async () => {
                 if (Math.random() > 0.85) {
                     const signals = ['BUY', 'SELL'];
                     const pairs = ['EUR/USD', 'GBP/USD', 'BTC/USD', 'XAU/USD'];
                     const signal = signals[Math.floor(Math.random() * signals.length)];
                     const pair = pairs[Math.floor(Math.random() * pairs.length)];
-                    const price = (1.08 + Math.random() * 0.02).toFixed(5);
+                    const price = pair === 'BTC/USD' ? (60000 + Math.random() * 5000).toFixed(0) : 
+                                 pair === 'XAU/USD' ? (2020 + Math.random() * 30).toFixed(2) :
+                                 (1.08 + Math.random() * 0.03).toFixed(5);
                     
+                    const signalData = {
+                        type: signal,
+                        pair: pair,
+                        entry: price,
+                        takeProfit: signal === 'BUY' ? (parseFloat(price) + 0.003).toFixed(5) : (parseFloat(price) - 0.003).toFixed(5),
+                        stopLoss: signal === 'BUY' ? (parseFloat(price) - 0.002).toFixed(5) : (parseFloat(price) + 0.002).toFixed(5),
+                        confidence: 75 + Math.random() * 20
+                    };
+                    
+                    // Save to Firestore
+                    await saveSignal(signalData);
+                    
+                    const display = document.getElementById('signalDisplay');
                     display.innerHTML = `
-                        <div style="background: ${signal === 'BUY' ? 'rgba(0,200,83,0.1)' : 'rgba(255,61,0,0.1)'}; border-radius: 12px; padding: 15px; border-left: 4px solid ${signal === 'BUY' ? 'var(--success)' : 'var(--danger)'}">
-                            <div style="display: flex; justify-content: space-between;">
-                                <strong>${signal} SIGNAL</strong>
+                        <div class="signal-card" style="border-left-color: ${signal === 'BUY' ? 'var(--success)' : 'var(--danger)'}">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <strong style="font-size: 1.2rem;">${signal} SIGNAL</strong>
                                 <span>${pair}</span>
                             </div>
-                            <div style="font-size: 1.5rem; font-weight: 700; margin: 10px 0;">${price}</div>
-                            <div style="display: flex; gap: 10px; font-size: 0.7rem;">
-                                <span>TP: ${(parseFloat(price) + 0.003).toFixed(5)}</span>
-                                <span>SL: ${(parseFloat(price) - 0.002).toFixed(5)}</span>
+                            <div style="font-size: 1.8rem; font-weight: 700; margin: 10px 0;">${price}</div>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 0.8rem;">
+                                <div>TP: ${signalData.takeProfit}</div>
+                                <div>SL: ${signalData.stopLoss}</div>
                             </div>
-                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 8px;">⏱️ Signal valid for 60 seconds</div>
+                            <div style="font-size: 0.7rem; color: var(--text-secondary); margin-top: 10px;">
+                                Confidence: ${signalData.confidence.toFixed(0)}% | Signal ID: ${Date.now()}
+                            </div>
                         </div>
                     `;
+                    
+                    // Play sound effect (vibrate on mobile)
+                    if (navigator.vibrate) navigator.vibrate(200);
                 }
             }, 3000);
-        }
+        };
         
-        function stopBot() {
+        // Stop Bot
+        window.stopBot = function() {
             if (!botRunning) return;
             botRunning = false;
             if (botInterval) clearInterval(botInterval);
-            const display = document.getElementById('signalDisplay');
-            display.innerHTML = '<div style="text-align: center; color: var(--danger);">⏸ Bot stopped. Click Start to resume.</div>';
-        }
-
-        // Helper functions
-        function showError(type, message) {
-            const errorDiv = document.getElementById(`${type}Error`);
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-            setTimeout(() => {
-                errorDiv.style.display = 'none';
-            }, 3000);
-        }
+            document.getElementById('botStatus').innerHTML = '● Stopped';
+            document.getElementById('botStatus').style.color = 'var(--danger)';
+            document.getElementById('signalDisplay').innerHTML = '<div style="text-align: center; color: var(--text-secondary); padding: 20px;">Bot stopped. Click Start to begin trading.</div>';
+        };
         
-        function showSuccess(type, message) {
-            const successDiv = document.getElementById(`${type}Success`);
-            successDiv.textContent = message;
-            successDiv.style.display = 'block';
-            setTimeout(() => {
-                successDiv.style.display = 'none';
-            }, 3000);
-        }
-
-        // Check for existing session
-        function checkSession() {
-            // For demo purposes, we don't auto-login
-            // In production, you'd check for a session token
-        }
+        // Check auth state on load
+        window.onAuthStateChanged(window.auth, async (user) => {
+            if (user) {
+                currentUser = user;
+                const userDoc = await window.getDoc(window.doc(window.db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    userData = userDoc.data();
+                    showDashboard();
+                } else {
+                    // User exists in Auth but not in Firestore (shouldn't happen)
+                    await window.signOut(window.auth);
+                }
+            }
+        });
         
-        // Initialize
-        checkSession();
+        // Initialize market data
+        updateMarketData();
     </script>
 </body>
 </html>
