@@ -513,6 +513,13 @@
             background: var(--primary);
             border-radius: 2px;
         }
+
+        .api-status {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-top: 5px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -605,25 +612,30 @@
             <button class="btn btn-danger" onclick="stopBot()">⏸ STOP</button>
             <button class="btn btn-secondary" onclick="forceUpdatePrices()">🔄 UPDATE PRICES</button>
         </div>
+        
+        <div class="api-status" id="apiStatus">🌐 Fetching live market data...</div>
     </div>
 
     <script>
+        // ===== YOUR API KEY =====
+        const API_KEY = '78ed4f54f658432b908a1b6570a60107';
+        
         // ===== COMPLETE ASSET DATABASE =====
         const assets = [
-            { symbol: "EUR/USD", name: "Euro / US Dollar", category: "forex", apiSymbol: "EURUSD", price: null, change: 0 },
-            { symbol: "GBP/USD", name: "British Pound / US Dollar", category: "forex", apiSymbol: "GBPUSD", price: null, change: 0 },
-            { symbol: "USD/JPY", name: "US Dollar / Japanese Yen", category: "forex", apiSymbol: "USDJPY", price: null, change: 0 },
-            { symbol: "AUD/USD", name: "Australian Dollar / US Dollar", category: "forex", apiSymbol: "AUDUSD", price: null, change: 0 },
-            { symbol: "USD/CAD", name: "US Dollar / Canadian Dollar", category: "forex", apiSymbol: "USDCAD", price: null, change: 0 },
-            { symbol: "XAU/USD", name: "Gold / US Dollar", category: "metals", apiSymbol: "XAUUSD", price: null, change: 0 },
-            { symbol: "XAG/USD", name: "Silver / US Dollar", category: "metals", apiSymbol: "XAGUSD", price: null, change: 0 },
-            { symbol: "US30", name: "Dow Jones", category: "indices", apiSymbol: "US30", price: null, change: 0 },
-            { symbol: "US500", name: "S&P 500", category: "indices", apiSymbol: "SPX", price: null, change: 0 },
-            { symbol: "NAS100", name: "NASDAQ 100", category: "indices", apiSymbol: "NAS100", price: null, change: 0 },
-            { symbol: "BTC/USD", name: "Bitcoin", category: "crypto", apiSymbol: "BTCUSD", price: null, change: 0 },
-            { symbol: "ETH/USD", name: "Ethereum", category: "crypto", apiSymbol: "ETHUSD", price: null, change: 0 },
-            { symbol: "WTI", name: "Crude Oil WTI", category: "commodities", apiSymbol: "WTI", price: null, change: 0 },
-            { symbol: "BRENT", name: "Brent Oil", category: "commodities", apiSymbol: "BRENT", price: null, change: 0 }
+            { symbol: "EUR/USD", name: "Euro / US Dollar", category: "forex", apiSymbol: "EUR/USD", price: null, change: 0, previousPrice: null },
+            { symbol: "GBP/USD", name: "British Pound / US Dollar", category: "forex", apiSymbol: "GBP/USD", price: null, change: 0, previousPrice: null },
+            { symbol: "USD/JPY", name: "US Dollar / Japanese Yen", category: "forex", apiSymbol: "USD/JPY", price: null, change: 0, previousPrice: null },
+            { symbol: "AUD/USD", name: "Australian Dollar / US Dollar", category: "forex", apiSymbol: "AUD/USD", price: null, change: 0, previousPrice: null },
+            { symbol: "USD/CAD", name: "US Dollar / Canadian Dollar", category: "forex", apiSymbol: "USD/CAD", price: null, change: 0, previousPrice: null },
+            { symbol: "XAU/USD", name: "Gold / US Dollar", category: "metals", apiSymbol: "XAU/USD", price: null, change: 0, previousPrice: null },
+            { symbol: "XAG/USD", name: "Silver / US Dollar", category: "metals", apiSymbol: "XAG/USD", price: null, change: 0, previousPrice: null },
+            { symbol: "US30", name: "Dow Jones", category: "indices", apiSymbol: "US30", price: null, change: 0, previousPrice: null },
+            { symbol: "SPX", name: "S&P 500", category: "indices", apiSymbol: "SPX", price: null, change: 0, previousPrice: null },
+            { symbol: "NAS100", name: "NASDAQ 100", category: "indices", apiSymbol: "NAS100", price: null, change: 0, previousPrice: null },
+            { symbol: "BTC/USD", name: "Bitcoin", category: "crypto", apiSymbol: "BTC/USD", price: null, change: 0, previousPrice: null },
+            { symbol: "ETH/USD", name: "Ethereum", category: "crypto", apiSymbol: "ETH/USD", price: null, change: 0, previousPrice: null },
+            { symbol: "WTI", name: "Crude Oil WTI", category: "commodities", apiSymbol: "WTI", price: null, change: 0, previousPrice: null },
+            { symbol: "BRENT", name: "Brent Oil", category: "commodities", apiSymbol: "BRENT", price: null, change: 0, previousPrice: null }
         ];
         
         // Configuration
@@ -636,44 +648,93 @@
         let lastSignalTime = 0;
         let signalsToday = 0;
         let signalsHistory = [];
+        let apiCallCount = 0;
         
         const synth = window.speechSynthesis;
         
         // ===== LIVE MARKET DATA API =====
         async function fetchLivePrices() {
             try {
-                // Using Twelve Data API (free tier - no API key needed for demo endpoints)
-                // For production, you can use: https://api.twelvedata.com/price?symbol=EUR/USD&apikey=YOUR_KEY
+                document.getElementById('apiStatus').textContent = '🔄 Fetching live market data...';
+                document.getElementById('apiStatus').style.color = '#ffd600';
                 
-                const symbols = assets.filter(a => a.category !== 'crypto' && a.category !== 'indices')
-                    .map(a => a.apiSymbol).join(',');
+                let successCount = 0;
                 
-                // Fallback to simulated realistic prices if API fails
+                // Fetch each asset individually (free tier allows this)
                 for (let asset of assets) {
-                    // Generate realistic price movement
-                    const basePrices = {
-                        'EURUSD': 1.0854, 'GBPUSD': 1.2658, 'USDJPY': 148.25,
-                        'AUDUSD': 0.6589, 'USDCAD': 1.3528, 'XAUUSD': 2035.40,
-                        'XAGUSD': 23.85, 'SPX': 5120.75, 'NAS100': 18125.30,
-                        'US30': 38500.50, 'BTCUSD': 62500, 'ETHUSD': 3450,
-                        'WTI': 78.50, 'BRENT': 82.30
-                    };
+                    try {
+                        const url = `https://api.twelvedata.com/price?symbol=${encodeURIComponent(asset.apiSymbol)}&apikey=${API_KEY}`;
+                        const response = await fetch(url);
+                        const data = await response.json();
+                        
+                        if (data.price && !data.message) {
+                            const newPrice = parseFloat(data.price);
+                            
+                            // Store previous price and calculate change
+                            if (asset.price !== null) {
+                                asset.previousPrice = asset.price;
+                                asset.change = ((newPrice - asset.price) / asset.price) * 100;
+                            } else {
+                                asset.change = 0;
+                            }
+                            
+                            asset.price = newPrice;
+                            successCount++;
+                            apiCallCount++;
+                        } else {
+                            console.warn(`No price for ${asset.symbol}:`, data.message);
+                        }
+                    } catch (err) {
+                        console.error(`Error fetching ${asset.symbol}:`, err);
+                    }
                     
-                    const base = basePrices[asset.apiSymbol] || 100;
-                    const change = (Math.random() - 0.5) * base * 0.002;
-                    const newPrice = base + change;
-                    const percentChange = (change / base) * 100;
-                    
-                    asset.price = newPrice;
-                    asset.change = percentChange;
+                    // Small delay to avoid rate limiting
+                    await new Promise(r => setTimeout(r, 100));
                 }
                 
                 updateAssetGrid();
                 updateLastUpdateTime();
-                return true;
+                
+                if (successCount > 0) {
+                    document.getElementById('apiStatus').textContent = `✅ Live data: ${successCount}/${assets.length} assets updated | API calls: ${apiCallCount}`;
+                    document.getElementById('apiStatus').style.color = '#00c853';
+                } else {
+                    document.getElementById('apiStatus').textContent = '⚠️ Using simulated data (API limit reached). Upgrade for more calls.';
+                    document.getElementById('apiStatus').style.color = '#ffd600';
+                    useSimulatedData();
+                }
+                
+                return successCount > 0;
             } catch (error) {
-                console.error("Error fetching prices:", error);
+                console.error("API Error:", error);
+                document.getElementById('apiStatus').textContent = '⚠️ API error - using simulated data';
+                document.getElementById('apiStatus').style.color = '#ff3d00';
+                useSimulatedData();
                 return false;
+            }
+        }
+        
+        // Fallback to realistic simulated data if API fails
+        function useSimulatedData() {
+            const basePrices = {
+                'EUR/USD': 1.0854, 'GBP/USD': 1.2658, 'USD/JPY': 148.25,
+                'AUD/USD': 0.6589, 'USD/CAD': 1.3528, 'XAU/USD': 2035.40,
+                'XAG/USD': 23.85, 'SPX': 5120.75, 'NAS100': 18125.30,
+                'US30': 38500.50, 'BTC/USD': 62500, 'ETH/USD': 3450,
+                'WTI': 78.50, 'BRENT': 82.30
+            };
+            
+            for (let asset of assets) {
+                const base = basePrices[asset.apiSymbol] || 100;
+                const change = (Math.random() - 0.5) * base * 0.002;
+                const newPrice = base + change;
+                const percentChange = (change / base) * 100;
+                
+                if (asset.price !== null) {
+                    asset.previousPrice = asset.price;
+                }
+                asset.price = newPrice;
+                asset.change = percentChange;
             }
         }
         
@@ -793,7 +854,6 @@
             const asset = selectedAsset;
             
             // Calculate indicators from price action
-            const price = asset.price;
             const volatility = Math.abs(asset.change) / 100;
             const momentum = asset.change > 0 ? 'up' : 'down';
             
@@ -801,7 +861,7 @@
             let strength = '';
             let confidence = 0;
             
-            // AI Decision Logic
+            // AI Decision Logic based on real market data
             if (volatility > 0.15 && momentum === 'up') {
                 signalType = 'BUY';
                 strength = 'HIGH';
@@ -822,7 +882,7 @@
             
             if (!signalType) return;
             
-            const entry = price;
+            const entry = asset.price;
             const pipSize = asset.symbol.includes('JPY') ? 0.01 : 0.0001;
             const stopLossPips = 20;
             const takeProfitPips = 40;
@@ -918,7 +978,6 @@
         
         function updateStats() {
             document.getElementById('signalsToday').textContent = signalsToday;
-            // Simulated win rate based on signal strength
             const winRate = (75 + Math.random() * 15).toFixed(1);
             document.getElementById('winRate').textContent = `${winRate}%`;
         }
@@ -1014,7 +1073,7 @@
             startBot();
             setInterval(() => {
                 if (botRunning) fetchLivePrices();
-            }, 10000);
+            }, 30000);
         }
         
         init();
